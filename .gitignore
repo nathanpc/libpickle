@@ -1,0 +1,9 @@
+# Object and executable files.
+*.obj
+*.exe
+*.o
+build/
+
+# Misc.
+.DS_Store
+Thumbs.db
