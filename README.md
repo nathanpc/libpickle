@@ -1,8 +1,7 @@
-# C++ Library for PickLE
+# PickLE for C
 
-Provides an easy way to deal with [PickLE](https://github.com/nathanpc/pickle)
-pick list files using C++.
-
+A plain C89, single source/header, library for parsing and easily working with
+[PickLE](https://github.com/nathanpc/pickle) pick list documents.
 
 ## License
 

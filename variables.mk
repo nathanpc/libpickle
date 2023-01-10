@@ -1,14 +1,21 @@
 ### variables.mk
-### Common variables used throught the project.
+### Common variables used throughout the project.
 ###
 ### Author: Nathan Campos <nathan@innoveworkshop.com>
 
+# Project
+PROJECT = pickle
+
 # Environment
-PLATFORM     := $(shell uname -s)
+PLATFORM := $(shell uname -s)
+
+# Directories and Paths
+SRCDIR   := src
+TESTDIR  := test
+BUILDDIR := build
 
 # Tools
 CC    = gcc
-CXX   = g++
 RM    = rm -f
 GDB   = gdb
 MKDIR = mkdir -p
@@ -17,10 +24,9 @@ TOUCH = touch
 # Handle OS X-specific tools.
 ifeq ($(PLATFORM), Darwin)
 	CC  = clang
-	CXX = clang
 	GDB = lldb
 endif
 
 # Flags
-CFLAGS  = -Wall -Wno-psabi
+CFLAGS  = -Wall -Wno-psabi --std=c89
 LDFLAGS =

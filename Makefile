@@ -5,25 +5,17 @@
 
 include variables.mk
 
-# Directories and Paths
-SRCDIR = src
-TESTDIR = test
-BUILDDIR := build
-
-# Sources and Flags
-SOURCES += $(SRCDIR)/pickle.cpp
-OBJECTS := $(patsubst $(SRCDIR)/%.cpp, $(BUILDDIR)/%.o, $(SOURCES))
+# Sources and Objects
+SOURCES += $(SRCDIR)/pickle.c
+OBJECTS := $(patsubst $(SRCDIR)/%.c, $(BUILDDIR)/%.o, $(SOURCES))
 
 .PHONY: all compile test debug memcheck clean
-all: compile repl
+all: compile
 
 compile: $(BUILDDIR)/stamp $(OBJECTS)
 
 $(BUILDDIR)/%.o: $(SRCDIR)/%.c
 	$(CC) $(CFLAGS) -c $< -o $@
-
-$(BUILDDIR)/%.o: $(SRCDIR)/%.cpp
-	$(CC) $(CFLAGS) $(CXXFLAGS) -c $< -o $@
 
 $(BUILDDIR)/stamp:
 	$(MKDIR) $(@D)
@@ -45,5 +37,4 @@ test: compile
 
 clean:
 	$(RM) -r $(BUILDDIR)
-	$(RM) valgrind.log
 	cd $(TESTDIR) && $(MAKE) clean
