@@ -1,13 +1,13 @@
 /**
  * pickle.h
- * An easy way to deal with PickLE pick list files.
+ * A library for parsing and easily working with PickLE pick list documents.
  *
  * @author Nathan Campos <nathan@innoveworkshop.com>
  */
 
-class PickLE {
-	private:
+#ifndef _PICKLE_H
+#define _PICKLE_H
 
-	public:
-	PickLE();
-};
+void pickle_test(const char *test);
+
+#endif /* _PICKLE_H */

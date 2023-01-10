@@ -5,23 +5,25 @@
 
 include ../variables.mk
 
-# Sources and Flags
-OBJECTS := main.o
-LIBDIR := ../src
-TARGET = pickle_test
-CFLAGS = -Wall -Wno-psabi
-LDFLAGS =
+# Directories and Paths
+LIBDIR      := ../$(SRCDIR)
+PRJBUILDDIR := ../$(BUILDDIR)
+TARGET      := $(PRJBUILDDIR)/pickle_test
+
+# Sources and Objects
+SOURCES  = main.c
+OBJECTS := $(addprefix $(PRJBUILDDIR)/, $(patsubst %.c, %.o, $(SOURCES)))
 
 .PHONY: all compile run debug memcheck clean
 all: compile
 
 compile: $(TARGET)
 
-$(TARGET): $(OBJECTS) # pickle.o
-	$(CXX) $(CFLAGS) $(CXXFLAGS) $(LDFLAGS) -o $@ $^
+$(TARGET): $(OBJECTS) $(PRJBUILDDIR)/pickle.o
+	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^
 
-%.o: %.cpp
-	$(CXX) $(CFLAGS) $(CXXFLAGS) -c $< -o $@
+$(PRJBUILDDIR)/%.o: %.c
+	$(CC) $(CFLAGS) -c $< -o $@
 
 debug: CFLAGS += -g3 -DDEBUG
 debug: clean compile
@@ -30,13 +32,13 @@ debug: clean compile
 memcheck: CFLAGS += -g3 -DDEBUG -DMEMCHECK
 memcheck: clean compile
 	valgrind --tool=memcheck --leak-check=yes --show-leak-kinds=all \
-		--track-origins=yes --log-file=valgrind.log $(TARGET)
-	cat valgrind.log
+		--track-origins=yes --log-file=$(PRJBUILDDIR)/valgrind.log $(TARGET)
+	cat $(PRJBUILDDIR)/valgrind.log
 
 run: compile
-	./$(TARGET)
+	$(TARGET)
 
 clean:
-	$(RM) *.o
+	$(RM) $(OBJECTS)
 	$(RM) $(TARGET)
-	$(RM) valgrind.log
+	$(RM) $(PRJBUILDDIR)/valgrind.log
