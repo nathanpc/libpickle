@@ -3,5 +3,17 @@
 		"libpickle"
 	],
 	"C_Cpp.default.cStandard": "c89",
-	"C_Cpp.clang_format_fallbackStyle": "{ BasedOnStyle: Google, IndentWidth: 4, TabWidth: 4, UseTab: Always, ColumnLimit: 0 }"
+	"C_Cpp.clang_format_fallbackStyle": "{ BasedOnStyle: Google, IndentWidth: 4, TabWidth: 4, UseTab: Always, ColumnLimit: 0 }",
+	"C_Cpp.default.configurationProvider": "ms-vscode.makefile-tools",
+	"makefile.configurations": [
+		{
+			"name": "Library",
+			"problemMatchers": [
+				"$gcc"
+			],
+			"makeArgs": []
+		},
+	],
+	"makefile.compileCommandsPath": "${workspaceFolder}/.vscode/compile_commands.json",
+	"sonarlint.pathToCompileCommands": "${workspaceFolder}/.vscode/compile_commands.json"
 }

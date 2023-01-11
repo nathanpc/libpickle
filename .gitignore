@@ -1,8 +1,12 @@
 # Object and executable files.
+build/
 *.obj
 *.exe
 *.o
-build/
+*.a
+
+# Visual Studio Code
+.vscode/compile_commands.json
 
 # Misc.
 .DS_Store
