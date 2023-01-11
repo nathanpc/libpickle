@@ -8,11 +8,15 @@ include variables.mk
 # Sources and Objects
 SOURCES += $(SRCDIR)/pickle.c
 OBJECTS := $(patsubst $(SRCDIR)/%.c, $(BUILDDIR)/%.o, $(SOURCES))
+TARGET  := $(BUILDDIR)/lib$(PROJECT).a
 
 .PHONY: all compile test debug memcheck clean
 all: compile
 
-compile: $(BUILDDIR)/stamp $(OBJECTS)
+compile: $(BUILDDIR)/stamp $(TARGET)
+
+$(TARGET): $(OBJECTS)
+	$(AR) rcs $@ $^
 
 $(BUILDDIR)/%.o: $(SRCDIR)/%.c
 	$(CC) $(CFLAGS) -c $< -o $@
@@ -21,8 +25,7 @@ $(BUILDDIR)/stamp:
 	$(MKDIR) $(@D)
 	$(TOUCH) $@
 
-run: compile test
-	cd $(TESTDIR) && $(MAKE) run
+run: test
 
 debug: CFLAGS += -g3 -DDEBUG
 debug: clean compile
@@ -33,7 +36,7 @@ memcheck: clean compile
 	cd $(TESTDIR) && $(MAKE) memcheck
 
 test: compile
-	cd $(TESTDIR) && $(MAKE)
+	cd $(TESTDIR) && $(MAKE) run
 
 clean:
 	$(RM) -r $(BUILDDIR)

@@ -8,22 +8,26 @@ include ../variables.mk
 # Directories and Paths
 LIBDIR      := ../$(SRCDIR)
 PRJBUILDDIR := ../$(BUILDDIR)
-TARGET      := $(PRJBUILDDIR)/pickle_test
+LIBPICKLE   := $(PRJBUILDDIR)/lib$(PROJECT).a
 
 # Sources and Objects
 SOURCES  = main.c
 OBJECTS := $(addprefix $(PRJBUILDDIR)/, $(patsubst %.c, %.o, $(SOURCES)))
+TARGET  := $(PRJBUILDDIR)/$(PROJECT)_test
 
 .PHONY: all compile run debug memcheck clean
 all: compile
 
-compile: $(TARGET)
+compile: $(LIBPICKLE) $(TARGET)
 
-$(TARGET): $(OBJECTS) $(PRJBUILDDIR)/pickle.o
+$(TARGET): $(OBJECTS) $(LIBPICKLE)
 	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^
 
 $(PRJBUILDDIR)/%.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@
+
+$(LIBPICKLE):
+	cd .. && $(MAKE)
 
 debug: CFLAGS += -g3 -DDEBUG
 debug: clean compile
