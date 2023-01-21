@@ -30,8 +30,8 @@ $(LIBPICKLE):
 	cd .. && $(MAKE)
 
 debug: CFLAGS += -g3 -DDEBUG
-debug: clean compile
-	$(GDB) $(TARGET)
+debug: clean compile ../$(PKLEXAMPLE)
+	$(GDB) $(TARGET) ../$(PKLEXAMPLE)
 
 memcheck: CFLAGS += -g3 -DDEBUG -DMEMCHECK
 memcheck: clean compile
@@ -39,8 +39,8 @@ memcheck: clean compile
 		--track-origins=yes --log-file=$(PRJBUILDDIR)/valgrind.log $(TARGET)
 	cat $(PRJBUILDDIR)/valgrind.log
 
-run: compile
-	$(TARGET)
+run: compile ../$(PKLEXAMPLE)
+	$(TARGET) ../$(PKLEXAMPLE)
 
 clean:
 	$(RM) $(OBJECTS)

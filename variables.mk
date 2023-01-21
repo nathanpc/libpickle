@@ -10,9 +10,10 @@ PROJECT = pickle
 PLATFORM := $(shell uname -s)
 
 # Directories and Paths
-SRCDIR   := src
-TESTDIR  := test
-BUILDDIR := build
+SRCDIR     := src
+TESTDIR    := test
+BUILDDIR   := build
+PKLEXAMPLE ?= example.pkl
 
 # Tools
 CC    = gcc
