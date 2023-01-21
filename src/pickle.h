@@ -16,6 +16,9 @@
 extern "C" {
 #endif
 
+/* Utility macros. */
+#define IF_PICKLE_ERROR(err) if ((err) > PICKLE_OK)
+
 /* PickLE parser status codes. */
 typedef enum {
 	PICKLE_FINISHED_PARSING = -2,
@@ -58,9 +61,9 @@ typedef struct {
 
 /* PickLE document handle. */
 typedef struct {
-	const char *fname;
+	char *fname;
 	FILE *fh;
-	const char *fmode;
+	char fmode[3];
 
 	pickle_property_t **properties;
 	int len_properties;
@@ -73,8 +76,10 @@ typedef struct {
 } pickle_doc_t;
 
 /* PickLE document operations. */
-pickle_err_t pickle_open(pickle_doc_t *doc, const char *fname, const char *fmode);
-pickle_err_t pickle_close(pickle_doc_t *doc);
+pickle_doc_t *pickle_doc_new(void);
+pickle_err_t pickle_doc_fopen(pickle_doc_t *doc, const char *fname, const char *fmode);
+pickle_err_t pickle_doc_fclose(pickle_doc_t *doc);
+pickle_err_t pickle_doc_free(pickle_doc_t *doc);
 
 /* PickLE parsing operations. */
 pickle_err_t pickle_parse_property(pickle_doc_t *doc, pickle_property_t *prop);

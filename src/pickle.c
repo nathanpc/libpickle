@@ -7,6 +7,7 @@
 
 #include "pickle.h"
 
+#include <errno.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -21,6 +22,31 @@ void pickle_error_msg_set(const char *msg);
 void pickle_error_msg_format(const char *format, ...);
 
 /**
+ * Initializes a brand new PickLE document object.
+ *
+ * @return A brand new PickLE document object.
+ */
+pickle_doc_t *pickle_doc_new(void) {
+	pickle_doc_t *doc;
+
+	/* Allocate our object. */
+	doc = (pickle_doc_t *)malloc(sizeof(pickle_doc_t));
+
+	/* Reset everything. */
+	doc->fname = NULL;
+	doc->fh = NULL;
+	memset(doc->fmode, '\0', 3);
+	doc->properties = NULL;
+	doc->len_properties = 0;
+	doc->categories = NULL;
+	doc->len_categories = 0;
+	doc->components = NULL;
+	doc->len_components = 0;
+
+	return doc;
+}
+
+/**
  * Opens an existing or brand new PickLE document file for parsing/saving.
  *
  * @param doc   Pointer to a PickLE document object.
@@ -30,7 +56,7 @@ void pickle_error_msg_format(const char *format, ...);
  * @return PICKLE_OK if the operation was successful. PICKLE_ERROR_FILE if an
  *         error occurred while trying to open the file.
  */
-pickle_err_t pickle_open(pickle_doc_t *doc, const char *fname, const char *fmode) {
+pickle_err_t pickle_doc_fopen(pickle_doc_t *doc, const char *fname, const char *fmode) {
 	/* Check if a document is still opened. */
 	if (doc->fh != NULL) {
 		pickle_error_msg_set("A document is already open. Close it before "
@@ -38,7 +64,23 @@ pickle_err_t pickle_open(pickle_doc_t *doc, const char *fname, const char *fmode
 		return PICKLE_ERROR_FILE;
 	}
 
-	return PICKLE_ERROR_NOT_IMPL;
+	/* Allocate space for the filename and copy it over. */
+	doc->fname = (char *)realloc(doc->fname,
+								 (strlen(fname) + 1) * sizeof(char));
+	strcpy(doc->fname, fname);
+
+	/* Set the file opening mode. */
+	strncpy(doc->fmode, fmode, 2);
+
+	/* Finally open the file. */
+	doc->fh = fopen(fname, fmode);
+	if (doc->fh == NULL) {
+		pickle_error_msg_format("Couldn't open file \"%s\": %s.", fname,
+								strerror(errno));
+		return PICKLE_ERROR_FILE;
+	}
+
+	return PICKLE_OK;
 }
 
 /**
@@ -48,9 +90,20 @@ pickle_err_t pickle_open(pickle_doc_t *doc, const char *fname, const char *fmode
  *
  * @return PICKLE_OK if the operation was successful. PICKLE_ERROR_FILE if an
  *         error occurred while trying to close the file.
+ *
+ * @see pickle_doc_free
  */
-pickle_err_t pickle_close(pickle_doc_t *doc) {
-	return PICKLE_ERROR_NOT_IMPL;
+pickle_err_t pickle_doc_fclose(pickle_doc_t *doc) {
+	/* Try to close the file handle. */
+	if (fclose(doc->fh) != 0) {
+		pickle_error_msg_format("Couldn't close file \"%s\": %s.", doc->fname,
+								strerror(errno));
+		return PICKLE_ERROR_FILE;
+	}
+
+	/* NULL out the file handle and return. */
+	doc->fh = NULL;
+	return PICKLE_OK;
 }
 
 /**
@@ -117,6 +170,26 @@ pickle_err_t pickle_parse_component(pickle_doc_t *doc, pickle_component_t *comp)
  */
 pickle_err_t pickle_parse_document(pickle_doc_t *doc) {
 	return PICKLE_ERROR_NOT_IMPL;
+}
+
+/**
+ * Frees up everything in the document object and closes the file handle. This
+ * is what you want to call for a proper clean up.
+ *
+ * @param doc Document object to be completely cleaned up.
+ */
+pickle_err_t pickle_doc_free(pickle_doc_t *doc) {
+	pickle_err_t err;
+
+	/* Start by closing the file handle. */
+	err = pickle_doc_fclose(doc);
+	IF_PICKLE_ERROR(err) {
+		return err;
+	}
+
+	/* TODO: Free the properties, categories, and components. */
+
+	return PICKLE_OK;
 }
 
 /**
