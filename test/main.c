@@ -10,6 +10,9 @@
 
 #include "../src/pickle.h"
 
+/* Private methods. */
+void error_cleanup(pickle_doc_t *doc);
+
 int main(int argc, char **argv) {
 	pickle_err_t err;
 	pickle_doc_t *doc;
@@ -26,7 +29,7 @@ int main(int argc, char **argv) {
 	/* Open a PickLE document. */
 	err = pickle_doc_fopen(doc, argv[1], "w+");
 	IF_PICKLE_ERROR(err) {
-		pickle_error_print();
+		error_cleanup(doc);
 		return err;
 	}
 
@@ -38,4 +41,15 @@ int main(int argc, char **argv) {
 	}
 
 	return 0;
+}
+
+/**
+ * A simple helper function to clean things up after an error occurred and
+ * inform the user.
+ *
+ * @param doc PickLE document object.
+ */
+void error_cleanup(pickle_doc_t *doc) {
+	pickle_error_print();
+	pickle_doc_free(doc);
 }
