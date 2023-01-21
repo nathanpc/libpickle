@@ -13,6 +13,15 @@
 #include <stdlib.h>
 #include <string.h>
 
+/* Decorate the error message with more information. */
+#ifdef DEBUG
+	#define STRINGIZE(x) STRINGIZE_WRAPPER(x)
+	#define STRINGIZE_WRAPPER(x) #x
+	#define EMSG(msg) msg " [" __FILE__ ":" STRINGIZE(__LINE__) "]"
+#else
+	#define EMSG(msg) msg
+#endif /* DEBUG */
+
 /* Private variables. */
 char *pickle_error_msg_buf = NULL;
 
@@ -59,8 +68,8 @@ pickle_doc_t *pickle_doc_new(void) {
 pickle_err_t pickle_doc_fopen(pickle_doc_t *doc, const char *fname, const char *fmode) {
 	/* Check if a document is still opened. */
 	if (doc->fh != NULL) {
-		pickle_error_msg_set("A document is already open. Close it before "
-							 "opening another one.");
+		pickle_error_msg_set(EMSG("A document is already open. Close it before "
+							 "opening another one."));
 		return PICKLE_ERROR_FILE;
 	}
 
@@ -75,7 +84,7 @@ pickle_err_t pickle_doc_fopen(pickle_doc_t *doc, const char *fname, const char *
 	/* Finally open the file. */
 	doc->fh = fopen(fname, fmode);
 	if (doc->fh == NULL) {
-		pickle_error_msg_format("Couldn't open file \"%s\": %s.", fname,
+		pickle_error_msg_format(EMSG("Couldn't open file \"%s\": %s."), fname,
 								strerror(errno));
 		return PICKLE_ERROR_FILE;
 	}
@@ -96,8 +105,8 @@ pickle_err_t pickle_doc_fopen(pickle_doc_t *doc, const char *fname, const char *
 pickle_err_t pickle_doc_fclose(pickle_doc_t *doc) {
 	/* Try to close the file handle. */
 	if (fclose(doc->fh) != 0) {
-		pickle_error_msg_format("Couldn't close file \"%s\": %s.", doc->fname,
-								strerror(errno));
+		pickle_error_msg_format(EMSG("Couldn't close file \"%s\": %s."),
+								doc->fname, strerror(errno));
 		return PICKLE_ERROR_FILE;
 	}
 
