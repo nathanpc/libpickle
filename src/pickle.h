@@ -12,6 +12,10 @@
 #include <stdio.h>
 #include <stdbool.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* PickLE parser status codes. */
 typedef enum {
 	PICKLE_FINISHED_PARSING = -2,
@@ -56,6 +60,7 @@ typedef struct {
 typedef struct {
 	const char *fname;
 	FILE *fh;
+	const char *fmode;
 
 	pickle_property_t **properties;
 	int len_properties;
@@ -68,7 +73,7 @@ typedef struct {
 } pickle_doc_t;
 
 /* PickLE document operations. */
-pickle_err_t pickle_open(pickle_doc_t *doc, const char *fname);
+pickle_err_t pickle_open(pickle_doc_t *doc, const char *fname, const char *fmode);
 pickle_err_t pickle_close(pickle_doc_t *doc);
 
 /* PickLE parsing operations. */
@@ -76,5 +81,13 @@ pickle_err_t pickle_parse_property(pickle_doc_t *doc, pickle_property_t *prop);
 pickle_err_t pickle_parse_category(pickle_doc_t *doc, pickle_category_t *cat);
 pickle_err_t pickle_parse_component(pickle_doc_t *doc, pickle_component_t *comp);
 pickle_err_t pickle_parse_document(pickle_doc_t *doc);
+
+/* Error handling. */
+const char *pickle_error_msg(void);
+void pickle_error_print(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* _PICKLE_H */
