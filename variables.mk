@@ -15,17 +15,17 @@ TESTDIR  := test
 BUILDDIR := build
 
 # Tools
-CC    ?= gcc
-AR    ?= AR
-GDB   ?= gdb
-RM     = rm -f
-MKDIR  = mkdir -p
-TOUCH  = touch
+CC    = gcc
+AR    = AR
+GDB   = gdb
+RM    = rm -f
+MKDIR = mkdir -p
+TOUCH = touch
 
 # Handle OS X-specific tools.
 ifeq ($(PLATFORM), Darwin)
-	CC  ?= clang
-	GDB ?= lldb
+	CC  = clang
+	GDB = lldb
 endif
 
 # Flags
