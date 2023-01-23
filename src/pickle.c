@@ -26,6 +26,8 @@
 char *pickle_error_msg_buf = NULL;
 
 /* Private methods. */
+size_t pickle_util_strstrcpy(char **dest, const char *start, const char *end);
+pickle_err_t pickle_parser_enclstr(const char *delim, const char *buf, const char **start, const char **end);
 void pickle_error_free(void);
 void pickle_error_msg_set(const char *msg);
 void pickle_error_msg_format(const char *format, ...);
@@ -116,72 +118,6 @@ pickle_err_t pickle_doc_fclose(pickle_doc_t *doc) {
 }
 
 /**
- * Parses a property header item at the beginning of the document.
- *
- * @param doc  PickLE document object.
- * @param prop Property object to be populated by this function. Will be set to
- *             NULL if there isn't a valid property to parse.
- *
- * @return PICKLE_OK if a property was parsed. PICKLE_PARSED_BLANK if a blank
- *         line was found. PICKLE_FINISHED_PARSING when there are no more
- *         properties to be parsed. PICKLE_ERROR_PARSING if the line we tried to
- *         parse was malformed.
- *
- * @see pickle_parse_document
- */
-pickle_err_t pickle_parse_property(pickle_doc_t *doc, pickle_property_t *prop) {
-	return PICKLE_ERROR_NOT_IMPL;
-}
-
-/**
- * Parses a category line in the document.
- *
- * @param doc PickLE document object.
- * @param cat Category object to be populated by this function. Will be set to
- *            NULL if there isn't a valid category to parse.
- *
- * @return PICKLE_OK if a category was parsed. PICKLE_PARSED_BLANK if a blank
- *         line was found. PICKLE_ERROR_PARSING if the line we tried to
- *         parse was malformed.
- *
- * @see pickle_parse_document
- */
-pickle_err_t pickle_parse_category(pickle_doc_t *doc, pickle_category_t *cat) {
-	return PICKLE_ERROR_NOT_IMPL;
-}
-
-/**
- * Parses a component item in the document.
- *
- * @param doc  PickLE document object.
- * @param comp Component object to be populated by this function. Will be set to
- *             NULL if there isn't a valid component to parse.
- *
- * @return PICKLE_OK if a component was parsed. PICKLE_PARSED_BLANK if a blank
- *         line was found. PICKLE_FINISHED_PARSING when there are no more
- *         components to be parsed. PICKLE_ERROR_PARSING if the line we tried to
- *         parse was malformed.
- *
- * @see pickle_parse_document
- */
-pickle_err_t pickle_parse_component(pickle_doc_t *doc, pickle_component_t *comp) {
-	return PICKLE_ERROR_NOT_IMPL;
-}
-
-/**
- * Parses a whole document at once and populates the contents field of the
- * pickle_doc_t structure.
- *
- * @param doc Opened PickLE document object.
- *
- * @return PICKLE_OK if everything was parsed fine. PICKLE_ERROR_PARSING if
- *         something in the document couldn't be parsed.
- */
-pickle_err_t pickle_parse_document(pickle_doc_t *doc) {
-	return PICKLE_ERROR_NOT_IMPL;
-}
-
-/**
  * Frees up everything in the document object and closes the file handle. This
  * is what you want to call for a proper clean up.
  *
@@ -197,6 +133,144 @@ pickle_err_t pickle_doc_free(pickle_doc_t *doc) {
 	}
 
 	/* TODO: Free the properties, categories, and components. */
+
+	return PICKLE_OK;
+}
+
+/**
+ * Parses a whole document at once and populates the contents field of the
+ * pickle_doc_t structure.
+ *
+ * @param doc Opened PickLE document object.
+ *
+ * @return PICKLE_OK if everything was parsed fine. PICKLE_ERROR_PARSING if
+ *         something in the document couldn't be parsed.
+ */
+pickle_err_t pickle_doc_parse(pickle_doc_t *doc) {
+	pickle_err_t err;
+	pickle_property_t *prop;
+
+	/* Check if the file has been opened. */
+	if (doc->fh == NULL) {
+		pickle_error_msg_set(EMSG(
+			"Can't parse a document that hasn't been "
+			"opened yet."));
+		return PICKLE_ERROR_FILE;
+	}
+
+	/* Start by parsing the document's properties. */
+	prop = NULL;
+	do {
+		/* Try to parse a property. */
+		err = pickle_parse_property(doc, &prop);
+		IF_PICKLE_ERROR(err) {
+			return err;
+		}
+	} while (err != PICKLE_FINISHED_PARSING);
+
+	/* TODO: Parse categories interlaced with components. */
+
+	return PICKLE_OK;
+}
+
+/**
+ * Parses a property header item at the beginning of the document.
+ *
+ * @warning prop will be allocated by this function and must be free'd by you.
+ *
+ * @param doc  PickLE document object.
+ * @param prop Property object to be populated by this function. Will be set to
+ *             NULL if there isn't a valid property to parse.
+ *
+ * @return PICKLE_OK if a property was parsed. PICKLE_PARSED_BLANK if a blank
+ *         line was found. PICKLE_FINISHED_PARSING when there are no more
+ *         properties to be parsed. PICKLE_ERROR_PARSING if the line we tried to
+ *         parse was malformed.
+ *
+ * @see pickle_parse_document
+ */
+pickle_err_t pickle_parse_property(pickle_doc_t *doc, pickle_property_t **prop) {
+	char *buf;
+	pickle_err_t err;
+
+	/* Allocate the brand new property. */
+	*prop = (pickle_property_t *)malloc(sizeof(pickle_property_t));
+
+	return PICKLE_ERROR_NOT_IMPL;
+}
+
+/**
+ * Parses a category line in the document.
+ *
+ * @warning cat will be allocated by this function and must be free'd by you.
+ *
+ * @param doc PickLE document object.
+ * @param cat Category object to be populated by this function. Will be set to
+ *            NULL if there isn't a valid category to parse.
+ *
+ * @return PICKLE_OK if a category was parsed. PICKLE_PARSED_BLANK if a blank
+ *         line was found. PICKLE_ERROR_PARSING if the line we tried to
+ *         parse was malformed.
+ *
+ * @see pickle_parse_document
+ */
+pickle_err_t pickle_parse_category(pickle_doc_t *doc, pickle_category_t **cat) {
+	return PICKLE_ERROR_NOT_IMPL;
+}
+
+/**
+ * Parses a component item in the document.
+ *
+ * @warning comp will be allocated by this function and must be free'd by you.
+ *
+ * @param doc  PickLE document object.
+ * @param comp Component object to be populated by this function. Will be set to
+ *             NULL if there isn't a valid component to parse.
+ *
+ * @return PICKLE_OK if a component was parsed. PICKLE_PARSED_BLANK if a blank
+ *         line was found. PICKLE_FINISHED_PARSING when there are no more
+ *         components to be parsed. PICKLE_ERROR_PARSING if the line we tried to
+ *         parse was malformed.
+ *
+ * @see pickle_parse_document
+ */
+pickle_err_t pickle_parse_component(pickle_doc_t *doc, pickle_component_t **comp) {
+	return PICKLE_ERROR_NOT_IMPL;
+}
+
+/**
+ * Lexer that extracts strings that are enclosed inside a set of tokens (delim).
+ *
+ * @param delim Tokens that delimit parts of the string.
+ * @param str   String to be lexed.
+ * @param start Start of a string that was enclosed in one of the tokens.
+ * @param end   End of the string that was enclosed in one of the tokens.
+ *
+ * @return PICKLE_OK if we were able to lex the string. PICKLE_ERROR_PARSING if
+ *         no tokens were found in the string. PICKLE_FINISHED_PARSING if the
+ *         tokens were found, but nothing was in between them.
+ */
+pickle_err_t pickle_parser_enclstr(const char *delim, const char *buf, const char **start, const char **end) {
+	/* Find the first occurrence of a token. */
+	*start = strpbrk(buf, delim);
+
+	/* Check if we've reached the end of the string without finding anything. */
+	if (*start[0] == '\0') {
+		*start = *end = NULL;
+		return PICKLE_ERROR_PARSING;
+	}
+
+	/* Skip consecutive tokens. */
+	*start += strspn(*start, delim);
+
+	/* Find the end of the string enclosed in the tokens. */
+	*end = strpbrk(buf, delim) - 1;
+
+	/* Check if there was nothing in between the tokens. */
+	if (*start == *end) {
+		*start = *end = NULL;
+		return PICKLE_FINISHED_PARSING;
+	}
 
 	return PICKLE_OK;
 }
@@ -266,4 +340,41 @@ void pickle_error_free(void) {
 	/* Free up the error message. */
 	free(pickle_error_msg_buf);
 	pickle_error_msg_buf = NULL;
+}
+
+/**
+ * Copies one string to another using a start and end portions of an original
+ * string. Basically strcpy that accepts substrings. It will always NULL
+ * terminate the destination.
+ *
+ * @warning This function will allocate memory for dest. Make sure you free this
+ *          string later.
+ *
+ * @param dest  Destination string. (Will be allocated by this function.)
+ * @param start Start of the string to be copied.
+ * @param end   Where should we stop copying the string?
+ *
+ * @return Number of bytes copied.
+ */
+size_t pickle_util_strstrcpy(char **dest, const char *start, const char *end) {
+	size_t len;
+	char *dest_buf;
+	const char *src_buf;
+
+	/* Allocate space for the new string. */
+	len = end - start + 1;
+	*dest = (char *)malloc(len * sizeof(char));
+
+	/* Copy the new string over. */
+	dest_buf = *dest;
+	src_buf = start;
+	len = 0;
+	while (src_buf != end) {
+		*dest_buf = *src_buf++;
+		dest_buf++;
+		len++;
+	}
+	*dest_buf = '\0';
+
+	return len;
 }
