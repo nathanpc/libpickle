@@ -12,6 +12,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/_types/_ssize_t.h>
 
 /* Decorate the error message with more information. */
 #ifdef DEBUG
@@ -22,11 +23,15 @@
 	#define EMSG(msg) msg
 #endif /* DEBUG */
 
+/* Private definitions. */
+#define LINEBUF_MAX_LEN 512
+
 /* Private variables. */
 char *pickle_error_msg_buf = NULL;
 
 /* Private methods. */
 size_t pickle_util_strstrcpy(char **dest, const char *start, const char *end);
+int pickle_util_getline(FILE *fh, char **line, size_t *rlen, size_t mlen);
 pickle_err_t pickle_parser_enclstr(const char *delim, const char *buf, const char **start, const char **end);
 void pickle_error_free(void);
 void pickle_error_msg_set(const char *msg);
@@ -153,8 +158,7 @@ pickle_err_t pickle_doc_parse(pickle_doc_t *doc) {
 	/* Check if the file has been opened. */
 	if (doc->fh == NULL) {
 		pickle_error_msg_set(EMSG(
-			"Can't parse a document that hasn't been "
-			"opened yet."));
+			"Can't parse a document that hasn't been opened yet."));
 		return PICKLE_ERROR_FILE;
 	}
 
@@ -164,6 +168,9 @@ pickle_err_t pickle_doc_parse(pickle_doc_t *doc) {
 		/* Try to parse a property. */
 		err = pickle_parse_property(doc, &prop);
 		IF_PICKLE_ERROR(err) {
+			if (prop != NULL)
+				free(prop);
+
 			return err;
 		}
 	} while (err != PICKLE_FINISHED_PARSING);
@@ -191,10 +198,23 @@ pickle_err_t pickle_doc_parse(pickle_doc_t *doc) {
  */
 pickle_err_t pickle_parse_property(pickle_doc_t *doc, pickle_property_t **prop) {
 	char *buf;
+	size_t len;
 	pickle_err_t err;
+
+	/* Read our line. */
+	if (pickle_util_getline(doc->fh, &buf, &len, LINEBUF_MAX_LEN) != 0) {
+		*prop = NULL;
+		pickle_error_msg_set(EMSG("An error occurred while reading a property "
+			"line from the document."));
+
+		return PICKLE_ERROR_FILE;
+	}
 
 	/* Allocate the brand new property. */
 	*prop = (pickle_property_t *)malloc(sizeof(pickle_property_t));
+
+	/* Free our internal resources. */
+	free(buf);
 
 	return PICKLE_ERROR_NOT_IMPL;
 }
@@ -377,4 +397,76 @@ size_t pickle_util_strstrcpy(char **dest, const char *start, const char *end) {
 	*dest_buf = '\0';
 
 	return len;
+}
+
+/**
+ * Re-implementation of getline for C89 with some modifications. Reads an entire
+ * line from a file, not including the newline separator, also ignores CR
+ * characters. Will treat EOF as a pseudo-newline.
+ *
+ * @warning This function will allocate memory for buf. Make sure you free this
+ *          string later.
+ *
+ * @param fh   File handle to read the line from.
+ * @param line Buffer that will store the read line. (ALLOCATED BY THIS FUNCTION)
+ * @param rlen Number of bytes copied into the buffer.
+ * @param mlen Maximum length of a line. (Used to allocate the internal buffer)
+ *
+ * @return 0 if the operation was successful. -1 if an error occurred. 1 if mlen
+ *         wasn't big enough to hold an entire line.
+ */
+int pickle_util_getline(FILE *fh, char **line, size_t *rlen, size_t mlen) {
+	char *buf;
+	char c;
+
+	/* Check if we have valid pointer to work with. */
+	if (line == NULL || rlen == NULL)
+		return -1;
+
+	/* Check if our file handle is valid. */
+	if ((fh == NULL) || ferror(fh) || feof(fh)) {
+		*line = NULL;
+		*rlen = 0;
+		return -1;
+	}
+
+	/* Allocate our line buffer. */
+	*line = (char *)malloc(mlen * sizeof(char));
+	if (*line == NULL)
+		return -1;
+
+	/* Go through the file character by character. */
+	*rlen = 0;
+	buf = *line;
+	while (((c = (char)getc(fh)) != '\n') && (c != EOF)) {
+		/* Check if we still have space in our buffer. */
+		if (*rlen == (mlen - 1)) {
+			free(*line);
+			*line = NULL;
+			*rlen = 0;
+
+			return 1;
+		}
+
+		/* Ignore carriage returns. */
+		if (c == '\r')
+			continue;
+
+		/* Copy read character over and increase our read counter. */
+		*buf = c;
+		buf++;
+		*rlen += 1;
+	}
+
+	/* Property terminate our buffer. */
+	*buf = '\0';
+
+	/* Resize the output string. */
+	*line = (char *)realloc(*line, (*rlen + 1) * sizeof(char));
+	if (*line == NULL) {
+		*rlen = 0;
+		return -1;
+	}
+
+	return 0;
 }

@@ -1,9 +1,12 @@
 {
 	"cSpell.words": [
 		"EMSG",
+		"enclstr",
 		"libpickle",
+		"LINEBUF",
 		"refdes",
-		"STRINGIZE"
+		"STRINGIZE",
+		"strstrcpy"
 	],
 	"C_Cpp.default.cStandard": "c89",
 	"C_Cpp.clang_format_fallbackStyle": "{ BasedOnStyle: Google, IndentWidth: 4, TabWidth: 4, UseTab: Always, ColumnLimit: 0 }",
