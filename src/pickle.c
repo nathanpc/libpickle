@@ -150,6 +150,9 @@ pickle_err_t pickle_doc_free(pickle_doc_t *doc) {
 		return err;
 	}
 
+	/* Free file name. */
+	free(doc->fname);
+
 	/* Free the properties. */
 	for (i = 0; i < doc->len_properties; i++) {
 		pickle_property_free(doc->properties[i]);
