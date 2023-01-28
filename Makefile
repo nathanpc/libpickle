@@ -10,7 +10,7 @@ SOURCES += $(SRCDIR)/pickle.c
 OBJECTS := $(patsubst $(SRCDIR)/%.c, $(BUILDDIR)/%.o, $(SOURCES))
 TARGET  := $(BUILDDIR)/lib$(PROJECT).a
 
-.PHONY: all compile test debug memcheck clean
+.PHONY: all compile compileall compiledb test debug memcheck clean
 all: compile
 
 compile: $(BUILDDIR)/stamp $(TARGET)
@@ -24,6 +24,12 @@ $(BUILDDIR)/%.o: $(SRCDIR)/%.c
 $(BUILDDIR)/stamp:
 	$(MKDIR) $(@D)
 	$(TOUCH) $@
+
+compiledb: clean
+	bear --output .vscode/compile_commands.json -- make compileall
+
+compileall: compile
+	cd $(TESTDIR) && $(MAKE) compile
 
 run: test
 
