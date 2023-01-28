@@ -329,7 +329,7 @@ pickle_err_t pickle_property_parse(pickle_doc_t *doc, pickle_property_t **prop) 
 	}
 
 	/* Copy the property name over. */
-	pickle_util_strstrcpy(&((*prop)->name), buf, cur);
+	pickle_util_strstrcpy(&((*prop)->name), buf, cur - 1);
 
 	/* Move the cursor over to skip the colon and any whitespace. */
 	cur += strspn(cur, ":" VALID_WHITESPACE);
@@ -517,7 +517,7 @@ bool pickle_util_iswtspc(const char *buf) {
  *
  * @param dest  Destination string. (Will be allocated by this function.)
  * @param start Start of the string to be copied.
- * @param end   Where should we stop copying the string? (Exclusive)
+ * @param end   Where should we stop copying the string? (Inclusive)
  *
  * @return Number of bytes copied.
  */
@@ -540,7 +540,7 @@ size_t pickle_util_strstrcpy(char **dest, const char *start, const char *end) {
 		src_buf++;
 		dest_buf++;
 		len++;
-	} while (src_buf != end);
+	} while (src_buf <= end);
 	*dest_buf = '\0';
 
 	return len;
