@@ -16,6 +16,7 @@ void error_cleanup(pickle_doc_t *doc);
 int main(int argc, char **argv) {
 	pickle_err_t err;
 	pickle_doc_t *doc;
+	size_t i;
 
 	/* Quick argument check. */
 	if (argc != 2) {
@@ -23,14 +24,33 @@ int main(int argc, char **argv) {
 		return 1;
 	}
 
+	printf("libpickle Test Program\n\n");
+
 	/* Initialize a new document object. */
 	doc = pickle_doc_new();
+	printf("New document object created.\n");
 
 	/* Open a PickLE document. */
-	err = pickle_doc_fopen(doc, argv[1], "w+");
+	err = pickle_doc_fopen(doc, argv[1], "r");
 	IF_PICKLE_ERROR(err) {
 		error_cleanup(doc);
 		return err;
+	}
+	printf("PickLE document \"%s\" opened.\n", argv[1]);
+
+	/* Parse the document. */
+	err = pickle_doc_parse(doc);
+	IF_PICKLE_ERROR(err) {
+		error_cleanup(doc);
+		return err;
+	}
+	printf("Document successfully parsed.\n");
+
+	/* Print the properties. */
+	printf("Got %lu properties!\n", doc->len_properties);
+	for (i = 0; i < doc->len_properties; i++) {
+		const pickle_property_t *prop = doc->properties[i];
+		printf("\t%s = %s\n", prop->name, prop->value);
 	}
 
 	/* Close everything up. */
@@ -39,6 +59,7 @@ int main(int argc, char **argv) {
 		pickle_error_print();
 		return err;
 	}
+	printf("Document closed and free'd.\n");
 
 	return 0;
 }

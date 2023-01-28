@@ -19,17 +19,23 @@
 	#define STRINGIZE(x) STRINGIZE_WRAPPER(x)
 	#define STRINGIZE_WRAPPER(x) #x
 	#define EMSG(msg) msg " [" __FILE__ ":" STRINGIZE(__LINE__) "]"
+	#define DEBUG_LOG(msg) \
+		printf("[DEBUG] \"%s\" [" __FILE__ ":" STRINGIZE(__LINE__) "]\n", (msg))
 #else
 	#define EMSG(msg) msg
+	#define DEBUG_LOG(msg) (void)0
 #endif /* DEBUG */
 
 /* Private definitions. */
-#define LINEBUF_MAX_LEN 512
+#define LINEBUF_MAX_LEN  1024
+#define VALID_WHITESPACE " \t"
 
 /* Private variables. */
 char *pickle_error_msg_buf = NULL;
 
 /* Private methods. */
+bool pickle_util_iswtspc(const char *buf);
+size_t pickle_util_strcpy(char **dest, const char *src);
 size_t pickle_util_strstrcpy(char **dest, const char *start, const char *end);
 int pickle_util_getline(FILE *fh, char **line, size_t *rlen, size_t mlen);
 pickle_err_t pickle_parser_enclstr(const char *delim, const char *buf, const char **start, const char **end);
@@ -38,9 +44,11 @@ void pickle_error_msg_set(const char *msg);
 void pickle_error_msg_format(const char *format, ...);
 
 /**
- * Initializes a brand new PickLE document object.
+ * Allocates a brand new PickLE document object.
+ * @warning This function allocates memory that you are responsible for freeing.
  *
- * @return A brand new PickLE document object.
+ * @return A brand new allocated PickLE document object.
+ * @see pickle_doc_free
  */
 pickle_doc_t *pickle_doc_new(void) {
 	pickle_doc_t *doc;
@@ -130,6 +138,7 @@ pickle_err_t pickle_doc_fclose(pickle_doc_t *doc) {
  */
 pickle_err_t pickle_doc_free(pickle_doc_t *doc) {
 	pickle_err_t err;
+	size_t i;
 
 	/* Start by closing the file handle. */
 	err = pickle_doc_fclose(doc);
@@ -137,7 +146,14 @@ pickle_err_t pickle_doc_free(pickle_doc_t *doc) {
 		return err;
 	}
 
-	/* TODO: Free the properties, categories, and components. */
+	/* Free the properties. */
+	for (i = 0; i < doc->len_properties; i++) {
+		pickle_property_free(doc->properties[i]);
+	}
+	doc->properties = NULL;
+	doc->len_properties = 0;
+
+	/* TODO: Free the categories and components. */
 
 	return PICKLE_OK;
 }
@@ -166,16 +182,81 @@ pickle_err_t pickle_doc_parse(pickle_doc_t *doc) {
 	prop = NULL;
 	do {
 		/* Try to parse a property. */
-		err = pickle_parse_property(doc, &prop);
+		err = pickle_property_parse(doc, &prop);
 		IF_PICKLE_ERROR(err) {
 			if (prop != NULL)
 				free(prop);
-
 			return err;
 		}
+
+		/* Append property to the collection. */
+		if (err == PICKLE_OK)
+			pickle_doc_property_add(doc, prop);
 	} while (err != PICKLE_FINISHED_PARSING);
 
 	/* TODO: Parse categories interlaced with components. */
+
+	return PICKLE_OK;
+}
+
+/**
+ * Appends a property to the document object properties collection.
+ *
+ * @param doc  PickLE document object.
+ * @param prop Property to be appended to the properties collection.
+ *
+ * @return pickle_err_t PICKLE_OK if everything went fine.
+ */
+pickle_err_t pickle_doc_property_add(pickle_doc_t *doc, pickle_property_t *prop) {
+	doc->properties = (pickle_property_t **)realloc(
+		doc->properties,
+		(doc->len_properties + 1) * sizeof(pickle_property_t *));
+	doc->properties[doc->len_properties] = prop;
+	doc->len_properties++;
+
+	return PICKLE_OK;
+}
+
+/**
+ * Allocates a brand new property object.
+ * @warning This function allocates memory that you are responsible for freeing.
+ *
+ * @return A brand new allocated property object.
+ * @see pickle_property_free
+ */
+pickle_property_t *pickle_property_new(void) {
+	/* Allocate the structure. */
+	pickle_property_t *prop =
+		(pickle_property_t *)malloc(sizeof(pickle_property_t));
+
+	/* Put it in a default state. */
+	prop->name = NULL;
+	prop->value = NULL;
+
+	return prop;
+}
+
+/**
+ * Frees up the resources allocated by a property object.
+ *
+ * @param prop Property object to be free'd.
+ *
+ * @return PICKLE_OK if the operation was successful.
+ */
+pickle_err_t pickle_property_free(pickle_property_t *prop) {
+	/* Check if we have anything to do. */
+	if (prop == NULL)
+		return PICKLE_OK;
+
+	/* Free up any internal allocations first. */
+	if (prop->name != NULL)
+		free(prop->name);
+	if (prop->value != NULL)
+		free(prop->value);
+
+	/* Free up our object. */
+	free(prop);
+	prop = NULL;
 
 	return PICKLE_OK;
 }
@@ -194,12 +275,12 @@ pickle_err_t pickle_doc_parse(pickle_doc_t *doc) {
  *         properties to be parsed. PICKLE_ERROR_PARSING if the line we tried to
  *         parse was malformed.
  *
- * @see pickle_parse_document
+ * @see pickle_doc_parse
  */
-pickle_err_t pickle_parse_property(pickle_doc_t *doc, pickle_property_t **prop) {
+pickle_err_t pickle_property_parse(pickle_doc_t *doc, pickle_property_t **prop) {
 	char *buf;
+	const char *cur;
 	size_t len;
-	pickle_err_t err;
 
 	/* Read our line. */
 	if (pickle_util_getline(doc->fh, &buf, &len, LINEBUF_MAX_LEN) != 0) {
@@ -210,13 +291,66 @@ pickle_err_t pickle_parse_property(pickle_doc_t *doc, pickle_property_t **prop) 
 		return PICKLE_ERROR_FILE;
 	}
 
+	/* Check if we have an empty line. */
+	if (pickle_util_iswtspc(buf)) {
+		free(buf);
+		return PICKLE_PARSED_BLANK;
+	}
+
+	/* Check if we have finished parsing. */
+	if (buf[0] == '-') {
+		if (strcmp(buf, "---") == 0) {
+			free(buf);
+			return PICKLE_FINISHED_PARSING;
+		}
+
+		/* Invalid property name. */
+		pickle_error_msg_set(EMSG("A property can't start with a dash."));
+		free(buf);
+		return PICKLE_ERROR_PARSING;
+	}
+
+	/* Check if line starts with a colon. */
+	if (buf[0] == ':') {
+		pickle_error_msg_set(EMSG("Property line must not start with a colon."));
+		free(buf);
+
+		return PICKLE_ERROR_PARSING;
+	}
+
 	/* Allocate the brand new property. */
 	*prop = (pickle_property_t *)malloc(sizeof(pickle_property_t));
 
-	/* Free our internal resources. */
-	free(buf);
+	/* Find the first occurrence of a colon. */
+	cur = strpbrk(buf, ":");
+	if (cur == NULL) {
+		pickle_error_msg_set(EMSG("Property line does not contain a colon."));
+		goto parsing_error;
+	}
 
-	return PICKLE_ERROR_NOT_IMPL;
+	/* Copy the property name over. */
+	pickle_util_strstrcpy(&((*prop)->name), buf, cur);
+
+	/* Move the cursor over to skip the colon and any whitespace. */
+	cur += strspn(cur, ":" VALID_WHITESPACE);
+	if (*cur == '\0') {
+		pickle_error_msg_set(EMSG("Property line does not contain a value."));
+		goto parsing_error;
+	}
+
+	/* Copy the property value over. */
+	pickle_util_strcpy(&((*prop)->value), cur);
+
+	/* Free our internal resources and return. */
+	free(buf);
+	return PICKLE_OK;
+
+parsing_error:
+	free(buf);
+	free(*prop);
+	*prop = NULL;
+
+	return PICKLE_ERROR_PARSING;
 }
 
 /**
@@ -232,7 +366,7 @@ pickle_err_t pickle_parse_property(pickle_doc_t *doc, pickle_property_t **prop) 
  *         line was found. PICKLE_ERROR_PARSING if the line we tried to
  *         parse was malformed.
  *
- * @see pickle_parse_document
+ * @see pickle_doc_parse
  */
 pickle_err_t pickle_parse_category(pickle_doc_t *doc, pickle_category_t **cat) {
 	return PICKLE_ERROR_NOT_IMPL;
@@ -252,7 +386,7 @@ pickle_err_t pickle_parse_category(pickle_doc_t *doc, pickle_category_t **cat) {
  *         components to be parsed. PICKLE_ERROR_PARSING if the line we tried to
  *         parse was malformed.
  *
- * @see pickle_parse_document
+ * @see pickle_doc_parse
  */
 pickle_err_t pickle_parse_component(pickle_doc_t *doc, pickle_component_t **comp) {
 	return PICKLE_ERROR_NOT_IMPL;
@@ -363,6 +497,17 @@ void pickle_error_free(void) {
 }
 
 /**
+ * Checks if a string only contains whitespace.
+ *
+ * @param buf String to be checked.
+ *
+ * @return Does this string consists only of whitespace?
+ */
+bool pickle_util_iswtspc(const char *buf) {
+	return *(buf + strspn(buf, VALID_WHITESPACE)) == '\0';
+}
+
+/**
  * Copies one string to another using a start and end portions of an original
  * string. Basically strcpy that accepts substrings. It will always NULL
  * terminate the destination.
@@ -372,7 +517,7 @@ void pickle_error_free(void) {
  *
  * @param dest  Destination string. (Will be allocated by this function.)
  * @param start Start of the string to be copied.
- * @param end   Where should we stop copying the string?
+ * @param end   Where should we stop copying the string? (Exclusive)
  *
  * @return Number of bytes copied.
  */
@@ -382,19 +527,54 @@ size_t pickle_util_strstrcpy(char **dest, const char *start, const char *end) {
 	const char *src_buf;
 
 	/* Allocate space for the new string. */
-	len = end - start + 1;
+	len = (end - start) + 1;
 	*dest = (char *)malloc(len * sizeof(char));
 
 	/* Copy the new string over. */
 	dest_buf = *dest;
 	src_buf = start;
 	len = 0;
-	while (src_buf != end) {
-		*dest_buf = *src_buf++;
+	do {
+		*dest_buf = *src_buf;
+
+		src_buf++;
 		dest_buf++;
 		len++;
-	}
+	} while (src_buf != end);
 	*dest_buf = '\0';
+
+	return len;
+}
+
+/**
+ * Similar to strcpy except we allocate the destination string automatically.
+ *
+ * @warning This function will allocate memory for dest. Make sure you free this
+ *          string later.
+ *
+ * @param dest Destination string. (Will be allocated by this function.)
+ * @param src  Source string to be copied.
+ *
+ * @return Number of bytes copied.
+ */
+size_t pickle_util_strcpy(char **dest, const char *src) {
+	size_t len;
+	char *dest_buf;
+	const char *src_buf;
+
+	/* Allocate space for the new string. */
+	len = strlen(src);
+	*dest = (char *)malloc((len + 1) * sizeof(char));
+
+	/* Copy the new string over. */
+	dest_buf = *dest;
+	src_buf = src;
+	do {
+		*dest_buf = *src_buf;
+
+		src_buf++;
+		dest_buf++;
+	} while (*src_buf != '\0');
 
 	return len;
 }
@@ -419,7 +599,7 @@ int pickle_util_getline(FILE *fh, char **line, size_t *rlen, size_t mlen) {
 	char *buf;
 	char c;
 
-	/* Check if we have valid pointer to work with. */
+	/* Check if we have a valid pointer to work with. */
 	if (line == NULL || rlen == NULL)
 		return -1;
 
@@ -458,7 +638,7 @@ int pickle_util_getline(FILE *fh, char **line, size_t *rlen, size_t mlen) {
 		*rlen += 1;
 	}
 
-	/* Property terminate our buffer. */
+	/* Properly terminate our buffer. */
 	*buf = '\0';
 
 	/* Resize the output string. */
@@ -468,5 +648,6 @@ int pickle_util_getline(FILE *fh, char **line, size_t *rlen, size_t mlen) {
 		return -1;
 	}
 
+	DEBUG_LOG(*line);
 	return 0;
 }

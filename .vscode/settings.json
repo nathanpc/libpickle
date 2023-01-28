@@ -2,8 +2,10 @@
 	"cSpell.words": [
 		"EMSG",
 		"enclstr",
+		"iswtspc",
 		"libpickle",
 		"LINEBUF",
+		"pickledoc",
 		"refdes",
 		"STRINGIZE",
 		"strstrcpy"

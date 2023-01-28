@@ -15,6 +15,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/_types/_size_t.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -63,7 +64,7 @@ typedef enum {
 
 /* Reference designator list. */
 typedef struct {
-	int length;
+	size_t length;
 	char **refdes;
 } refdes_list_t;
 
@@ -97,13 +98,13 @@ typedef struct {
 	char fmode[3];
 
 	pickle_property_t **properties;
-	int len_properties;
+	size_t len_properties;
 
 	pickle_category_t **categories;
-	int len_categories;
+	size_t len_categories;
 
 	pickle_component_t **components;
-	int len_components;
+	size_t len_components;
 } pickle_doc_t;
 
 /* PickLE document operations. */
@@ -112,11 +113,16 @@ pickle_err_t pickle_doc_fopen(pickle_doc_t *doc, const char *fname, const char *
 pickle_err_t pickle_doc_fclose(pickle_doc_t *doc);
 pickle_err_t pickle_doc_free(pickle_doc_t *doc);
 pickle_err_t pickle_doc_parse(pickle_doc_t *doc);
+pickle_err_t pickle_doc_property_add(pickle_doc_t *doc, pickle_property_t *prop);
 
 /* PickLE parsing operations. */
-pickle_err_t pickle_parse_property(pickle_doc_t *doc, pickle_property_t **prop);
 pickle_err_t pickle_parse_category(pickle_doc_t *doc, pickle_category_t **cat);
 pickle_err_t pickle_parse_component(pickle_doc_t *doc, pickle_component_t **comp);
+
+/* PickLE property operations. */
+pickle_property_t *pickle_property_new(void);
+pickle_err_t pickle_property_free(pickle_property_t *prop);
+pickle_err_t pickle_property_parse(pickle_doc_t *doc, pickle_property_t **prop);
 
 /* Error handling. */
 const char *pickle_error_msg(void);
