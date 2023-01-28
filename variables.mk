@@ -17,7 +17,7 @@ PKLEXAMPLE ?= example.pkl
 
 # Tools
 CC    = gcc
-AR    = AR
+AR    = ar
 GDB   = gdb
 RM    = rm -f
 MKDIR = mkdir -p
