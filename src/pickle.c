@@ -12,7 +12,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/_types/_ssize_t.h>
 
 /* Decorate the error message with more information. */
 #ifdef DEBUG
@@ -25,6 +24,11 @@
 	#define EMSG(msg) msg
 	#define DEBUG_LOG(msg) (void)0
 #endif /* DEBUG */
+
+/* Work with compilers that don't provide an vsnprintf implementation. */
+#ifndef vsnprintf
+	#define VSNPRINTF_MAX_LEN 1024 /* Horrible, I know... */
+#endif /* vsnprintf */
 
 /* Private definitions. */
 #define LINEBUF_MAX_LEN  1024
@@ -455,16 +459,27 @@ void pickle_error_msg_format(const char *format, ...) {
 	va_list args;
 
 	/* Allocate enough space for our message. */
+#ifndef vsnprintf
+	len = VSNPRINTF_MAX_LEN;
+#else
 	va_start(args, format);
-	len = vsnprintf(NULL, 0, format, args);
+	len = vsnprintf(NULL, 0, format, args) + 1;
 	va_end(args);
+#endif /* vsnprintf */
 	pickle_error_msg_buf = (char *)realloc(pickle_error_msg_buf,
-										   (len + 1) * sizeof(char));
+										   len * sizeof(char));
 
 	/* Copy our formatted message. */
 	va_start(args, format);
 	vsprintf(pickle_error_msg_buf, format, args);
 	va_end(args);
+
+#ifndef vsnprintf
+	/* Ensure that we have a properly sized string. */
+	len = strlen(pickle_error_msg_buf) + 1;
+	pickle_error_msg_buf = (char *)realloc(pickle_error_msg_buf,
+										   len * sizeof(char));
+#endif /* vsnprintf */
 }
 
 /**
