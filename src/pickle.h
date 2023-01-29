@@ -120,6 +120,10 @@ pickle_err_t pickle_parse_component(pickle_doc_t *doc, pickle_component_t **comp
 
 /* PickLE property operations. */
 pickle_property_t *pickle_property_new(void);
+const char *pickle_property_name_get(const pickle_property_t *prop);
+void pickle_property_name_set(pickle_property_t *prop, const char *name);
+const char *pickle_property_value_get(const pickle_property_t *prop);
+void pickle_property_value_set(pickle_property_t *prop, const char *value);
 pickle_err_t pickle_property_free(pickle_property_t *prop);
 pickle_err_t pickle_property_parse(pickle_doc_t *doc, pickle_property_t **prop);
 

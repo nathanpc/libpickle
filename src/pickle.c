@@ -244,6 +244,48 @@ pickle_property_t *pickle_property_new(void) {
 }
 
 /**
+ * Gets the name of a property.
+ *
+ * @param prop Property to get the name from.
+ *
+ * @return Name of the property or NULL if one wasn't defined yet.
+ */
+const char *pickle_property_name_get(const pickle_property_t *prop) {
+	return (const char *)prop->name;
+}
+
+/**
+ * Sets the name of a property.
+ *
+ * @param prop Property to set the name of.
+ * @param name Name to be set.
+ */
+void pickle_property_name_set(pickle_property_t *prop, const char *name) {
+	pickle_util_strcpy(&prop->name, name);
+}
+
+/**
+ * Gets the value of a property.
+ *
+ * @param prop Property to get the value from.
+ *
+ * @return Value of the property or NULL if one wasn't defined yet.
+ */
+const char *pickle_property_value_get(const pickle_property_t *prop) {
+	return (const char *)prop->value;
+}
+
+/**
+ * Sets the value of a property.
+ *
+ * @param prop Property to set the value of.
+ * @param value Value to be set.
+ */
+void pickle_property_value_set(pickle_property_t *prop, const char *value) {
+	pickle_util_strcpy(&prop->value, value);
+}
+
+/**
  * Frees up the resources allocated by a property object.
  *
  * @param prop Property object to be free'd.
@@ -346,7 +388,7 @@ pickle_err_t pickle_property_parse(pickle_doc_t *doc, pickle_property_t **prop) 
 	}
 
 	/* Copy the property value over. */
-	pickle_util_strcpy(&((*prop)->value), cur);
+	pickle_property_value_set(*prop, cur);
 
 	/* Free our internal resources and return. */
 	free(buf);
@@ -565,12 +607,13 @@ size_t pickle_util_strstrcpy(char **dest, const char *start, const char *end) {
 }
 
 /**
- * Similar to strcpy except we allocate the destination string automatically.
+ * Similar to strcpy except we allocate (reallocate if needed) the destination
+ * string automatically.
  *
  * @warning This function will allocate memory for dest. Make sure you free this
  *          string later.
  *
- * @param dest Destination string. (Will be allocated by this function.)
+ * @param dest Destination string. (Will be [re]allocated by this function.)
  * @param src  Source string to be copied.
  *
  * @return Number of bytes copied.
@@ -580,9 +623,13 @@ size_t pickle_util_strcpy(char **dest, const char *src) {
 	char *dest_buf;
 	const char *src_buf;
 
+	/* Check if we have a valid destination pointer. */
+	if (dest == NULL)
+		return 0;
+
 	/* Allocate space for the new string. */
 	len = strlen(src);
-	*dest = (char *)malloc((len + 1) * sizeof(char));
+	*dest = (char *)realloc(*dest, (len + 1) * sizeof(char));
 
 	/* Copy the new string over. */
 	dest_buf = *dest;
