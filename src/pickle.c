@@ -35,7 +35,7 @@
 #define VALID_WHITESPACE " \t"
 
 /* Private variables. */
-char *pickle_error_msg_buf = NULL;
+static char *pickle_error_msg_buf = NULL;
 
 /* Private methods. */
 bool pickle_util_iswtspc(const char *buf);
@@ -166,6 +166,47 @@ pickle_err_t pickle_doc_free(pickle_doc_t *doc) {
 }
 
 /**
+ * Reads a line from the document file.
+ *
+ * @warning This function automatically allocates memory for the line. You are
+ *          responsible for freeing this later.
+ *
+ * @param doc  Opened PickLE document object.
+ * @param line Line that was read from the file. (Allocated by this function)
+ *
+ * @return PICKLE_OK if we were able to get a line with contents from the file.
+ *         PICKLE_PARSED_BLANK if we got an empty or just whitespace line.
+ *         PICKLE_ERROR_FILE if there was an error while trying to read the file.
+ */
+pickle_err_t pickle_doc_getline(pickle_doc_t *doc, char **line) {
+	size_t len;
+
+	/* Read our line. */
+	if (pickle_util_getline(doc->fh, line, &len, LINEBUF_MAX_LEN) != 0) {
+		pickle_error_msg_set(EMSG("An error occurred while reading a line from "
+			"the document."));
+
+		/* Ensure that we free any resources. */
+		if (*line != NULL) {
+			free(*line);
+			*line = NULL;
+		}
+
+		return PICKLE_ERROR_FILE;
+	}
+
+	/* Check if we have an empty line. */
+	if (pickle_util_iswtspc(*line)) {
+		free(*line);
+		*line = NULL;
+
+		return PICKLE_PARSED_BLANK;
+	}
+
+	return PICKLE_OK;
+}
+
+/**
  * Parses a whole document at once and populates the contents field of the
  * pickle_doc_t structure.
  *
@@ -175,6 +216,7 @@ pickle_err_t pickle_doc_free(pickle_doc_t *doc) {
  *         something in the document couldn't be parsed.
  */
 pickle_err_t pickle_doc_parse(pickle_doc_t *doc) {
+	char *line;
 	pickle_err_t err;
 	pickle_property_t *prop;
 
@@ -186,10 +228,23 @@ pickle_err_t pickle_doc_parse(pickle_doc_t *doc) {
 	}
 
 	/* Start by parsing the document's properties. */
+	line = NULL;
 	prop = NULL;
 	do {
+		/* Get line from document file. */
+		err = pickle_doc_getline(doc, &line);
+		IF_PICKLE_ERROR(err) {
+			if (line != NULL)
+				free(line);
+			return err;
+		}
+
+		/* Check if we only had whitespace. */
+		if (err == PICKLE_PARSED_BLANK)
+			continue;
+
 		/* Try to parse a property. */
-		err = pickle_property_parse(doc, &prop);
+		err = pickle_property_parse(line, &prop);
 		IF_PICKLE_ERROR(err) {
 			if (prop != NULL)
 				free(prop);
@@ -199,6 +254,12 @@ pickle_err_t pickle_doc_parse(pickle_doc_t *doc) {
 		/* Append property to the collection. */
 		if (err == PICKLE_OK)
 			pickle_doc_property_add(doc, prop);
+
+		/* Free up our resources. */
+		if (line != NULL) {
+			free(line);
+			line = NULL;
+		}
 	} while (err != PICKLE_FINISHED_PARSING);
 
 	/* TODO: Parse categories interlaced with components. */
@@ -311,11 +372,11 @@ pickle_err_t pickle_property_free(pickle_property_t *prop) {
 }
 
 /**
- * Parses a property header item at the beginning of the document.
+ * Parses a property line.
  *
  * @warning prop will be allocated by this function and must be free'd by you.
  *
- * @param doc  PickLE document object.
+ * @param line Line to be parsed.
  * @param prop Property object to be populated by this function. Will be set to
  *             NULL if there isn't a valid property to parse.
  *
@@ -326,59 +387,37 @@ pickle_err_t pickle_property_free(pickle_property_t *prop) {
  *
  * @see pickle_doc_parse
  */
-pickle_err_t pickle_property_parse(pickle_doc_t *doc, pickle_property_t **prop) {
-	char *buf;
+pickle_err_t pickle_property_parse(const char *line, pickle_property_t **prop) {
 	const char *cur;
-	size_t len;
-
-	/* Read our line. */
-	if (pickle_util_getline(doc->fh, &buf, &len, LINEBUF_MAX_LEN) != 0) {
-		*prop = NULL;
-		pickle_error_msg_set(EMSG("An error occurred while reading a property "
-			"line from the document."));
-
-		return PICKLE_ERROR_FILE;
-	}
-
-	/* Check if we have an empty line. */
-	if (pickle_util_iswtspc(buf)) {
-		free(buf);
-		return PICKLE_PARSED_BLANK;
-	}
 
 	/* Check if we have finished parsing. */
-	if (buf[0] == '-') {
-		if (strcmp(buf, "---") == 0) {
-			free(buf);
+	if (line[0] == '-') {
+		if (strcmp(line, "---") == 0)
 			return PICKLE_FINISHED_PARSING;
-		}
 
 		/* Invalid property name. */
 		pickle_error_msg_set(EMSG("A property can't start with a dash."));
-		free(buf);
 		return PICKLE_ERROR_PARSING;
 	}
 
 	/* Check if line starts with a colon. */
-	if (buf[0] == ':') {
+	if (line[0] == ':') {
 		pickle_error_msg_set(EMSG("Property line must not start with a colon."));
-		free(buf);
-
 		return PICKLE_ERROR_PARSING;
 	}
 
 	/* Allocate the brand new property. */
-	*prop = (pickle_property_t *)malloc(sizeof(pickle_property_t));
+	*prop = pickle_property_new();
 
 	/* Find the first occurrence of a colon. */
-	cur = strpbrk(buf, ":");
+	cur = strpbrk(line, ":");
 	if (cur == NULL) {
 		pickle_error_msg_set(EMSG("Property line does not contain a colon."));
 		goto parsing_error;
 	}
 
 	/* Copy the property name over. */
-	pickle_util_strstrcpy(&((*prop)->name), buf, cur - 1);
+	pickle_util_strstrcpy(&((*prop)->name), line, cur - 1);
 
 	/* Move the cursor over to skip the colon and any whitespace. */
 	cur += strspn(cur, ":" VALID_WHITESPACE);
@@ -387,15 +426,11 @@ pickle_err_t pickle_property_parse(pickle_doc_t *doc, pickle_property_t **prop) 
 		goto parsing_error;
 	}
 
-	/* Copy the property value over. */
+	/* Copy the property value over and return. */
 	pickle_property_value_set(*prop, cur);
-
-	/* Free our internal resources and return. */
-	free(buf);
 	return PICKLE_OK;
 
 parsing_error:
-	free(buf);
 	free(*prop);
 	*prop = NULL;
 
@@ -403,13 +438,13 @@ parsing_error:
 }
 
 /**
- * Parses a category line in the document.
+ * Parses a category line.
  *
  * @warning cat will be allocated by this function and must be free'd by you.
  *
- * @param doc PickLE document object.
- * @param cat Category object to be populated by this function. Will be set to
- *            NULL if there isn't a valid category to parse.
+ * @param line Line to be parsed.
+ * @param cat  Category object to be populated by this function. Will be set to
+ *             NULL if there isn't a valid category to parse.
  *
  * @return PICKLE_OK if a category was parsed. PICKLE_PARSED_BLANK if a blank
  *         line was found. PICKLE_ERROR_PARSING if the line we tried to
@@ -417,8 +452,35 @@ parsing_error:
  *
  * @see pickle_doc_parse
  */
-pickle_err_t pickle_parse_category(pickle_doc_t *doc, pickle_category_t **cat) {
-	return PICKLE_ERROR_NOT_IMPL;
+pickle_err_t pickle_category_parse(const char *line, pickle_category_t **cat) {
+	const char *cur;
+
+	/* Check if line starts with a colon. */
+	if (line[0] == ':') {
+		pickle_error_msg_set(EMSG("Category line must not start with a colon."));
+		return PICKLE_ERROR_PARSING;
+	}
+
+	/* Allocate the brand new property. */
+	*cat = (pickle_category_t *)malloc(sizeof(pickle_category_t));
+	/* TODO: Change for pickle_category_new(). */
+
+	/* Find the first occurrence of a colon. */
+	cur = strpbrk(line, ":");
+	if (cur == NULL) {
+		pickle_error_msg_set(EMSG("Category line does not contain a colon."));
+		goto parsing_error;
+	}
+
+	/* Copy the category name over and return. */
+	pickle_util_strstrcpy(&((*cat)->name), line, cur - 1);
+	return PICKLE_OK;
+
+parsing_error:
+	free(*cat);
+	*cat = NULL;
+
+	return PICKLE_ERROR_PARSING;
 }
 
 /**
