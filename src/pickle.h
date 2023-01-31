@@ -114,6 +114,7 @@ pickle_err_t pickle_doc_free(pickle_doc_t *doc);
 pickle_err_t pickle_doc_parse(pickle_doc_t *doc);
 pickle_err_t pickle_doc_getline(pickle_doc_t *doc, char **line);
 pickle_err_t pickle_doc_property_add(pickle_doc_t *doc, pickle_property_t *prop);
+pickle_err_t pickle_doc_category_add(pickle_doc_t *doc, pickle_category_t *cat);
 
 /* PickLE parsing operations. */
 pickle_err_t pickle_parse_component(pickle_doc_t *doc, pickle_component_t **comp);
@@ -128,6 +129,10 @@ pickle_err_t pickle_property_free(pickle_property_t *prop);
 pickle_err_t pickle_property_parse(const char *line, pickle_property_t **prop);
 
 /* PickLE category operations. */
+pickle_category_t *pickle_category_new(void);
+const char *pickle_category_name_get(const pickle_category_t *cat);
+void pickle_category_name_set(pickle_category_t *cat, const char *name);
+pickle_err_t pickle_category_free(pickle_category_t *cat);
 pickle_err_t pickle_category_parse(const char *line, pickle_category_t **cat);
 
 /* Error handling. */

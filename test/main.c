@@ -53,6 +53,13 @@ int main(int argc, char **argv) {
 		printf("\t%s = %s\n", prop->name, prop->value);
 	}
 
+	/* Print the categories. */
+	printf("Got %lu categories!\n", doc->len_categories);
+	for (i = 0; i < doc->len_categories; i++) {
+		const pickle_category_t *cat = doc->categories[i];
+		printf("\t- %s\n", cat->name);
+	}
+
 	/* Close everything up. */
 	err = pickle_doc_free(doc);
 	IF_PICKLE_ERROR(err) {

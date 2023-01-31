@@ -3,6 +3,7 @@
 		"compiledb",
 		"EMSG",
 		"enclstr",
+		"iscat",
 		"iswtspc",
 		"libpickle",
 		"LINEBUF",

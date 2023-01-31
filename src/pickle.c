@@ -42,6 +42,7 @@ bool pickle_util_iswtspc(const char *buf);
 size_t pickle_util_strcpy(char **dest, const char *src);
 size_t pickle_util_strstrcpy(char **dest, const char *start, const char *end);
 int pickle_util_getline(FILE *fh, char **line, size_t *rlen, size_t mlen);
+bool pickle_parser_iscat(const char *line);
 pickle_err_t pickle_parser_enclstr(const char *delim, const char *buf, const char **start, const char **end);
 void pickle_error_free(void);
 void pickle_error_msg_set(const char *msg);
@@ -180,9 +181,16 @@ pickle_err_t pickle_doc_free(pickle_doc_t *doc) {
  */
 pickle_err_t pickle_doc_getline(pickle_doc_t *doc, char **line) {
 	size_t len;
+	int ret;
 
 	/* Read our line. */
-	if (pickle_util_getline(doc->fh, line, &len, LINEBUF_MAX_LEN) != 0) {
+	ret = pickle_util_getline(doc->fh, line, &len, LINEBUF_MAX_LEN);
+	if (ret != 0) {
+		/* Check if we've reached the end of the file. */
+		if (ret == -2)
+			return PICKLE_FINISHED_PARSING;
+
+		/* Set the error message. */
 		pickle_error_msg_set(EMSG("An error occurred while reading a line from "
 			"the document."));
 
@@ -219,6 +227,8 @@ pickle_err_t pickle_doc_parse(pickle_doc_t *doc) {
 	char *line;
 	pickle_err_t err;
 	pickle_property_t *prop;
+	pickle_category_t *cat;
+	pickle_component_t *comp;
 
 	/* Check if the file has been opened. */
 	if (doc->fh == NULL) {
@@ -234,8 +244,11 @@ pickle_err_t pickle_doc_parse(pickle_doc_t *doc) {
 		/* Get line from document file. */
 		err = pickle_doc_getline(doc, &line);
 		IF_PICKLE_ERROR(err) {
-			if (line != NULL)
+			if (line != NULL) {
 				free(line);
+				line = NULL;
+			}
+
 			return err;
 		}
 
@@ -246,8 +259,11 @@ pickle_err_t pickle_doc_parse(pickle_doc_t *doc) {
 		/* Try to parse a property. */
 		err = pickle_property_parse(line, &prop);
 		IF_PICKLE_ERROR(err) {
-			if (prop != NULL)
-				free(prop);
+			if (line != NULL) {
+				free(line);
+				line = NULL;
+			}
+
 			return err;
 		}
 
@@ -262,7 +278,57 @@ pickle_err_t pickle_doc_parse(pickle_doc_t *doc) {
 		}
 	} while (err != PICKLE_FINISHED_PARSING);
 
-	/* TODO: Parse categories interlaced with components. */
+	/* Try to parse categories and components. */
+	line = NULL;
+	prop = NULL;
+	cat = NULL;
+	comp = NULL;
+	do {
+		/* TODO: Check if first parsed thing was a category. */
+
+		/* Get line from document file. */
+		err = pickle_doc_getline(doc, &line);
+		IF_PICKLE_ERROR(err) {
+			if (line != NULL) {
+				free(line);
+				line = NULL;
+			}
+
+			return err;
+		}
+
+		/* Check if we only had whitespace. */
+		if (err == PICKLE_PARSED_BLANK) {
+			continue;
+		} else if (err == PICKLE_FINISHED_PARSING) {
+			/* Have we reached the end of the file? */
+			break;
+		}
+
+		/* Check if we have a category. */
+		if (pickle_parser_iscat(line)) {
+			/* Try to parse a category. */
+			err = pickle_category_parse(line, &cat);
+			IF_PICKLE_ERROR(err) {
+				if (line != NULL) {
+					free(line);
+					line = NULL;
+				}
+
+				return err;
+			}
+
+			/* Append category to the collection. */
+			if (err == PICKLE_OK)
+				pickle_doc_category_add(doc, cat);
+		}
+
+		/* Free up our resources. */
+		if (line != NULL) {
+			free(line);
+			line = NULL;
+		}
+	} while ((err <= PICKLE_OK) && (err != PICKLE_FINISHED_PARSING));
 
 	return PICKLE_OK;
 }
@@ -273,7 +339,7 @@ pickle_err_t pickle_doc_parse(pickle_doc_t *doc) {
  * @param doc  PickLE document object.
  * @param prop Property to be appended to the properties collection.
  *
- * @return pickle_err_t PICKLE_OK if everything went fine.
+ * @return PICKLE_OK if everything went fine.
  */
 pickle_err_t pickle_doc_property_add(pickle_doc_t *doc, pickle_property_t *prop) {
 	doc->properties = (pickle_property_t **)realloc(
@@ -281,6 +347,24 @@ pickle_err_t pickle_doc_property_add(pickle_doc_t *doc, pickle_property_t *prop)
 		(doc->len_properties + 1) * sizeof(pickle_property_t *));
 	doc->properties[doc->len_properties] = prop;
 	doc->len_properties++;
+
+	return PICKLE_OK;
+}
+
+/**
+ * Appends a category to the document object categories collection.
+ *
+ * @param doc PickLE document object.
+ * @param cat Category to be appended to the categories collection.
+ *
+ * @return PICKLE_OK if everything went fine.
+ */
+pickle_err_t pickle_doc_category_add(pickle_doc_t *doc, pickle_category_t *cat) {
+	doc->categories = (pickle_category_t **)realloc(
+		doc->categories,
+		(doc->len_categories + 1) * sizeof(pickle_category_t *));
+	doc->categories[doc->len_categories] = cat;
+	doc->len_categories++;
 
 	return PICKLE_OK;
 }
@@ -431,10 +515,70 @@ pickle_err_t pickle_property_parse(const char *line, pickle_property_t **prop) {
 	return PICKLE_OK;
 
 parsing_error:
-	free(*prop);
-	*prop = NULL;
-
+	pickle_property_free(*prop);
 	return PICKLE_ERROR_PARSING;
+}
+
+/**
+ * Allocates a brand new category object.
+ * @warning This function allocates memory that you are responsible for freeing.
+ *
+ * @return A brand new allocated category object.
+ * @see pickle_category_free
+ */
+pickle_category_t *pickle_category_new(void) {
+	/* Allocate the structure. */
+	pickle_category_t *cat =
+		(pickle_category_t *)malloc(sizeof(pickle_category_t));
+
+	/* Put it in a default state. */
+	cat->name = NULL;
+
+	return cat;
+}
+
+/**
+ * Gets the name of a category.
+ *
+ * @param cat Category to get the name from.
+ *
+ * @return Name of the category or NULL if one wasn't defined yet.
+ */
+const char *pickle_category_name_get(const pickle_category_t *cat) {
+	return (const char *)cat->name;
+}
+
+/**
+ * Sets the name of a category.
+ *
+ * @param cat  Category to set the name of.
+ * @param name Name to be set.
+ */
+void pickle_category_name_set(pickle_category_t *cat, const char *name) {
+	pickle_util_strcpy(&cat->name, name);
+}
+
+/**
+ * Frees up the resources allocated by a category object.
+ *
+ * @param cat Category object to be free'd.
+ *
+ * @return PICKLE_OK if the operation was successful.
+ */
+pickle_err_t pickle_category_free(pickle_category_t *cat) {
+	/* Check if we have anything to do. */
+	if (cat == NULL)
+		return PICKLE_OK;
+
+	/* Free up any internal allocations first. */
+	if (cat->name != NULL)
+		free(cat->name);
+
+	/* Free up our object. */
+	free(cat);
+	cat = NULL;
+
+	return PICKLE_OK;
 }
 
 /**
@@ -461,9 +605,8 @@ pickle_err_t pickle_category_parse(const char *line, pickle_category_t **cat) {
 		return PICKLE_ERROR_PARSING;
 	}
 
-	/* Allocate the brand new property. */
-	*cat = (pickle_category_t *)malloc(sizeof(pickle_category_t));
-	/* TODO: Change for pickle_category_new(). */
+	/* Allocate the brand new category. */
+	*cat = pickle_category_new();
 
 	/* Find the first occurrence of a colon. */
 	cur = strpbrk(line, ":");
@@ -477,9 +620,7 @@ pickle_err_t pickle_category_parse(const char *line, pickle_category_t **cat) {
 	return PICKLE_OK;
 
 parsing_error:
-	free(*cat);
-	*cat = NULL;
-
+	pickle_category_free(*cat);
 	return PICKLE_ERROR_PARSING;
 }
 
@@ -501,6 +642,18 @@ parsing_error:
  */
 pickle_err_t pickle_parse_component(pickle_doc_t *doc, pickle_component_t **comp) {
 	return PICKLE_ERROR_NOT_IMPL;
+}
+
+/**
+ * Checks if a line is a category definition.
+ *
+ * @param line Line to be checked.
+ *
+ * @return Is this line a properly-formed category definition?
+ */
+bool pickle_parser_iscat(const char *line) {
+	/* Perform a simple check if the last character in a line is a colon. */
+	return line[strlen(line) - 1] == ':';
 }
 
 /**
@@ -720,7 +873,7 @@ size_t pickle_util_strcpy(char **dest, const char *src) {
  * @param mlen Maximum length of a line. (Used to allocate the internal buffer)
  *
  * @return 0 if the operation was successful. -1 if an error occurred. 1 if mlen
- *         wasn't big enough to hold an entire line.
+ *         wasn't big enough to hold an entire line. -2 if we've reached EOF.
  */
 int pickle_util_getline(FILE *fh, char **line, size_t *rlen, size_t mlen) {
 	char *buf;
@@ -731,10 +884,17 @@ int pickle_util_getline(FILE *fh, char **line, size_t *rlen, size_t mlen) {
 		return -1;
 
 	/* Check if our file handle is valid. */
-	if ((fh == NULL) || ferror(fh) || feof(fh)) {
+	if ((fh == NULL) || ferror(fh)) {
 		*line = NULL;
 		*rlen = 0;
 		return -1;
+	}
+
+	/* Check if we've reached the end of the file. */
+	if (feof(fh)) {
+		*line = NULL;
+		*rlen = 0;
+		return -2;
 	}
 
 	/* Allocate our line buffer. */
